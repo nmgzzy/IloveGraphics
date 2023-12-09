@@ -1,5 +1,7 @@
 #include <iostream>
 #include <opencv2/opencv.hpp>
+#include <cmath>
+#include <algorithm>
 
 #include "global.hpp"
 #include "rasterizer.hpp"
@@ -49,7 +51,7 @@ Eigen::Matrix4f get_model_matrix(float angle)
 
 Eigen::Matrix4f get_projection_matrix(float eye_fov, float aspect_ratio, float zNear, float zFar)
 {
-    // TODO: Use the same projection matrix from the previous assignments
+    // Use the same projection matrix from the previous assignments
     Eigen::Matrix4f projection;
 
     float w, h, d;
@@ -155,15 +157,28 @@ Eigen::Vector3f phong_fragment_shader(const fragment_shader_payload& payload)
 
     Eigen::Vector3f color = payload.color;
     Eigen::Vector3f point = payload.view_pos;
-    Eigen::Vector3f normal = payload.normal;
+    Eigen::Vector3f normal = payload.normal.normalized();
 
     Eigen::Vector3f result_color = {0, 0, 0};
-    for (auto& light : lights)
+    Eigen::Vector3f v_vec = (eye_pos - point).normalized();
+
+    for (auto &light : lights)
     {
-        // TODO: For each light source in the code, calculate what the *ambient*, *diffuse*, and *specular* 
+        // TODO: For each light source in the code, calculate what the *ambient*, *diffuse*, and *specular*
         // components are. Then, accumulate that result on the *result_color* object.
-        
+        Eigen::Vector3f l_vec = (light.position - point);
+        Eigen::Vector3f h_vec = (l_vec.normalized() + v_vec.normalized()).normalized();
+
+        // we need to calculate length, so l_vec is not normalized.
+        float r2 = l_vec.dot(l_vec);
+        // we need cos(alpha) in max(0, n.l) / max(0, n.h), so it is normalized.
+        Eigen::Vector3f diffuse = kd.cwiseProduct(light.intensity / r2) * std::max(0.f, (float)normal.dot(l_vec.normalized()));
+        Eigen::Vector3f specular = ks.cwiseProduct(light.intensity / r2) * pow(std::max(0.f, (float)normal.dot(h_vec.normalized())), p);
+        result_color += diffuse + specular;
     }
+
+    Eigen::Vector3f ambient = ka.cwiseProduct(amb_light_intensity);
+    result_color += ambient;
 
     return result_color * 255.f;
 }
